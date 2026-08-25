@@ -1,5 +1,3 @@
-import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2";
-env.allowLocalModels=false;env.useBrowserCache=true;
 const $=s=>document.querySelector(s),video=$("#video"),stage=$("#stage"),overlay=$("#captionOverlay"),timeline=$("#timeline");
 const input=$("#videoInput"),status=$("#status"),auto=$("#autoCaption");let file=null,url=null,captions=[],styleIndex=0,recognizer=null;
 const fonts={Inter:"Arial, sans-serif",Impact:"Impact, Arial Black, sans-serif",Georgia:"Georgia, serif","Arial Black":"Arial Black, Arial, sans-serif","Comic":"Comic Sans MS, cursive","Condensed":"Arial Narrow, Arial, sans-serif","Mono":"monospace"};
@@ -35,7 +33,12 @@ renderStyles();applyPreset();
 
 function fmt(t){if(!isFinite(t))return"00:00";return String(Math.floor(t/60)).padStart(2,"0")+":"+String(Math.floor(t%60)).padStart(2,"0")}
 function load(f){if(!f)return;if(!f.type.startsWith("video/"))return alert("Please choose a video file.");file=f;if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(f);video.src=url;video.load();$("#dropHint").style.display="none";captions=[];renderTimeline();status.textContent="Video loaded — tap Generate Auto Captions."}
-input.onchange=e=>load(e.target.files[0]);$("#chooseBtn").onclick=()=>input.click();stage.addEventListener("dragover",e=>e.preventDefault());stage.addEventListener("drop",e=>{e.preventDefault();load(e.dataTransfer.files[0])});
+input.addEventListener("change",e=>{
+  const f=e.target.files&&e.target.files[0];
+  if(f) load(f);
+});
+input.addEventListener("click",()=>{status.textContent="Choose a video file from your device.";});
+$("#chooseBtn").addEventListener("click",e=>{e.preventDefault();e.stopPropagation();input.click();});stage.addEventListener("dragover",e=>e.preventDefault());stage.addEventListener("drop",e=>{e.preventDefault();load(e.dataTransfer.files[0])});
 video.onloadedmetadata=()=>{$("#seek").max=video.duration;$("#time").textContent=`00:00 / ${fmt(video.duration)}`};
 video.ontimeupdate=()=>{$("#seek").value=video.currentTime;$("#time").textContent=`${fmt(video.currentTime)} / ${fmt(video.duration)}`;const i=captions.findIndex(c=>video.currentTime>=c.start&&video.currentTime<c.end);overlay.textContent=i>=0?captions[i].text:"";document.querySelectorAll(".clip").forEach((x,j)=>x.classList.toggle("active",j===i));if(i>=0){overlay.classList.remove("anim-pop","anim-bounce","anim-slideup","anim-slideleft","anim-zoom","anim-shake","anim-glow","anim-word");void overlay.offsetWidth;overlay.classList.add(anims[$("#animationSelect").value])}};
 $("#seek").oninput=e=>video.currentTime=+e.target.value;$("#play").onclick=()=>{if(video.paused){video.play();$("#play").textContent="Ⅱ"}else{video.pause();$("#play").textContent="▶"}};$("#back").onclick=()=>video.currentTime=Math.max(0,video.currentTime-3);$("#forward").onclick=()=>video.currentTime=Math.min(video.duration||0,video.currentTime+3);
@@ -45,7 +48,24 @@ async function audioTo16k(f){const ctx=new AudioContext(),buf=await ctx.decodeAu
 function showProgress(t,x){$("#progress").classList.remove("hidden");$("#progressTitle").textContent=t;$("#progressText").textContent=x;$("#progressBar").style.width="5%"}function hideProgress(){$("#progress").classList.add("hidden")}
 function splitSeg(s){const text=(s.text||"").trim().replace(/\s+/g," ");if(!text)return[];const ws=text.split(" "),n=Math.max(2,Math.min(5,+$("#words").value||5)),groups=[];for(let i=0;i<ws.length;i+=n)groups.push(ws.slice(i,i+n).join(" "));let a=+s.start||0,b=+s.end;if(!isFinite(b)||b<=a)b=a+groups.length*.7;const d=(b-a)/groups.length;return groups.map((g,i)=>({start:a+i*d,end:i===groups.length-1?b:a+(i+1)*d,text:g.toUpperCase()}))}
 function normalize(chunks,total){let out=[];for(const c of chunks||[])out.push(...splitSeg({text:c.text,start:c.timestamp?.[0],end:c.timestamp?.[1]}));for(let i=0;i<out.length;i++){out[i].start=Math.max(0,Math.min(total,out[i].start));out[i].end=Math.max(out[i].start+.25,Math.min(total,out[i].end));if(i&&out[i].start<out[i-1].end)out[i].start=out[i-1].end}return out.filter(c=>c.end>c.start)}
-async function getModel(){if(recognizer)return recognizer;showProgress("Loading free Whisper AI…","First run downloads the model and caches it.");recognizer=await pipeline("automatic-speech-recognition","Xenova/whisper-tiny",{device:"wasm",progress_callback:p=>{if(typeof p.progress==="number")$("#progressBar").style.width=Math.max(5,Math.min(100,p.progress))+"%"}});return recognizer}
+async function getModel(){
+  if(recognizer)return recognizer;
+  showProgress("Loading free Whisper AI…","Downloading the caption engine. This happens only on the first caption run.");
+  if(!window.__whisperModule){
+    window.__whisperModule=await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2");
+    window.__whisperModule.env.allowLocalModels=false;
+    window.__whisperModule.env.useBrowserCache=true;
+  }
+  const {pipeline}=window.__whisperModule;
+  recognizer=await pipeline("automatic-speech-recognition","Xenova/whisper-tiny",{
+    device:"wasm",
+    progress_callback:p=>{
+      if(typeof p.progress==="number")
+        $("#progressBar").style.width=Math.max(5,Math.min(100,p.progress))+"%";
+    }
+  });
+  return recognizer;
+}
 auto.onclick=async()=>{if(!file)return alert("Upload a video first.");auto.disabled=true;auto.textContent="⏳ Transcribing…";try{status.textContent="Extracting audio…";const audio=await audioTo16k(file),model=await getModel();status.textContent="Whisper is transcribing…";$("#progressTitle").textContent="Transcribing your video…";$("#progressBar").style.width="60%";const args={chunk_length_s:30,stride_length_s:5,return_timestamps:true},lang=$("#language").value;if(lang!=="auto")args.language=lang;const out=await model(audio,args);captions=normalize(out.chunks||[],video.duration);if(!captions.length){const t=(out.text||"").trim(),ws=t.split(/\s+/),n=Math.max(2,Math.min(5,+$("#words").value||5)),groups=[];for(let i=0;i<ws.length;i+=n)groups.push(ws.slice(i,i+n).join(" "));const d=video.duration/Math.max(1,groups.length);captions=groups.map((x,i)=>({start:i*d,end:i===groups.length-1?video.duration:(i+1)*d,text:x.toUpperCase()}))}renderTimeline();status.textContent=`Done — ${captions.length} caption blocks generated.`}catch(e){console.error(e);status.textContent="Auto caption failed.";alert("Auto caption failed: "+(e?.message||e))}finally{hideProgress();auto.disabled=false;auto.textContent="✨ Generate Auto Captions"}};
 $("#clearCaptions").onclick=()=>{captions=[];overlay.textContent="";renderTimeline();status.textContent="Captions cleared."};
 document.querySelectorAll(".ratios button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".ratios button").forEach(x=>x.classList.remove("active"));b.classList.add("active");stage.style.aspectRatio=b.dataset.ratio});
