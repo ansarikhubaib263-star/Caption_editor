@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>CaptionX Pro — Auto Caption Editor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Caption<span>X</span><small> PRO</small></div>
+  <div class="top-actions">
+    <select id="quality"><option>1080p</option><option>720p</option></select>
+    <button id="exportBtn" class="export">Export Video</button>
+  </div>
+</header>
+
+<main>
+<section class="workspace">
+  <div class="preview-head">
+    <span>PREVIEW</span>
+    <div class="ratios">
+      <button class="active" data-ratio="9/16">Original</button>
+      <button data-ratio="9/16">9:16</button>
+      <button data-ratio="16/9">16:9</button>
+      <button data-ratio="1/1">1:1</button>
+      <button data-ratio="4/5">4:5</button>
+    </div>
+  </div>
+
+  <div class="stage-wrap">
+    <div id="stage" class="stage">
+      <video id="video" playsinline></video>
+      <canvas id="renderCanvas"></canvas>
+      <div id="captionOverlay"></div>
+      <div id="dropHint">
+        <b>Drop a video here</b>
+        <span>or choose a video from your device</span>
+        <button id="chooseBtn" class="primary">Choose Video</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="transport">
+    <button id="back">◀</button>
+    <button id="play" class="round">▶</button>
+    <button id="forward">▶</button>
+    <span id="time">00:00 / 00:00</span>
+    <input id="seek" type="range" min="0" max="1" step="0.01" value="0">
+  </div>
+</section>
+
+<section class="caption-tools">
+  <label class="file-btn">Add Video<input id="videoInput" type="file" accept="video/*"></label>
+  <button id="autoCaption" class="primary">✨ Generate Auto Captions</button>
+  <select id="language">
+    <option value="auto">Auto detect</option>
+    <option value="en">English</option>
+    <option value="hi">Hindi</option>
+    <option value="ur">Urdu</option>
+  </select>
+  <label class="words">Words
+    <select id="words"><option>2</option><option>3</option><option selected>5</option><option>7</option><option>10</option></select>
+  </label>
+  <span id="status">Upload a video to begin.</span>
+</section>
+
+<section class="timeline-panel">
+  <div class="section-title"><b>CAPTION TIMELINE</b><button id="clearCaptions">Clear</button></div>
+  <div id="timeline" class="timeline"><div class="empty">Generated caption blocks appear here.</div></div>
+</section>
+
+<section class="styles">
+  <div class="section-title"><div><b>Change style</b><small>Reference-inspired caption presets</small></div></div>
+  <div id="stylesGrid" class="styles-grid"></div>
+</section>
+</main>
+
+<div id="progress" class="progress hidden">
+  <div class="progress-box">
+    <b id="progressTitle">Loading AI model…</b>
+    <div class="bar"><i id="progressBar"></i></div>
+    <small id="progressText">The first run downloads the free Whisper model to your browser.</small>
+  </div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
